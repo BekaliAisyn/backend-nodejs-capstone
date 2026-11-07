@@ -1,64 +1,36 @@
-/*jshint esversion: 8 */
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const pinoLogger = require('./logger');
-
-const connectToDatabase = require('./models/db');
-const {loadData} = require("./util/import-mongo/index");
-
-
-const app = express();
-app.use("*",cors());
-const port = 3060;
-
-// Connect to MongoDB; we just do this one time
-connectToDatabase().then(() => {
-    pinoLogger.info('Connected to DB');
-})
-    .catch((e) => console.error('Failed to connect to DB', e));
-
-
-app.use(express.json());
-
-// Route files
-
-// authRoutes Step 2: import the authRoutes and store in a constant called authRoutes
-//{{insert code here}}
-
-// Items API Task 1: import the secondChanceItemsRoutes and store in a constant called secondChanceItemsRoutes
-//{{insert code here}}
-
-// Search API Task 1: import the searchRoutes and store in a constant called searchRoutes
-//{{insert code here}}
-
-
-const pinoHttp = require('pino-http');
-const logger = require('./logger');
-
-app.use(pinoHttp({ logger }));
-
-// Use Routes
-// authRoutes Step 2: add the authRoutes and to the server by using the app.use() method.
-//{{insert code here}}
-
-// Items API Task 2: add the secondChanceItemsRoutes to the server by using the app.use() method.
-//{{insert code here}}
-
-// Search API Task 2: add the searchRoutes to the server by using the app.use() method.
-//{{insert code here}}
-
-
-// Global Error Handler
-app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(500).send('Internal Server Error');
+const express=require('express'),path=require('path'),cors=require('cors');
+const connectToDatabase=require('./models/db');
+const authRoutes=require('./routes/authRoutes');
+const secondChanceItemsRoutes=require('./routes/secondChanceItemsRoutes');
+const searchRoutes=require('./routes/searchRoutes');
+const {secret}=require('./middleware/auth');
+const app=express();
+app.disable('x-powered-by');
+app.use(cors({origin:process.env.FRONTEND_ORIGIN||false}));
+app.use(express.json({limit:'100kb'}));
+app.use('/api/auth',authRoutes);
+app.use('/api/secondchance/items',secondChanceItemsRoutes);
+app.use('/api/secondchance/search',searchRoutes);
+app.get('/health',async(req,res,next)=>{try{const db=await connectToDatabase();await db.command({ping:1});res.json({status:'ok',database:'connected'});}catch(e){next(e);}});
+app.use('/images',express.static(path.join(__dirname,'public/images')));
+const frontend=path.join(__dirname,'../secondChance-frontend/build');
+app.get('/',(req,res)=>res.sendFile(path.join(frontend,'home.html')));
+app.use(express.static(frontend));
+app.get('/app*',(req,res)=>res.sendFile(path.join(frontend,'index.html')));
+app.use((req,res)=>res.status(404).json({error:'Route not found'}));
+app.use((error,req,res,next)=>{
+ const status=error.status||(error.name==='MulterError'?400:500);
+ if(status===500)console.error(error.message);
+ res.status(status).json({error:status===500?'Internal server error':error.message});
 });
+if(require.main===module){
+ secret();
+ connectToDatabase().then(()=>{
+  const server=app.listen(process.env.PORT||3060,'0.0.0.0',()=>console.log('SecondChance listening on port '+server.address().port));
+  const stop=()=>server.close(async()=>{await connectToDatabase.close();process.exit(0);});
+  process.on('SIGTERM',stop);process.on('SIGINT',stop);
+ }).catch(e=>{console.error(e.message);process.exitCode=1;});
+}
+module.exports=app;
 
-app.get("/",(req,res)=>{
-    res.send("Inside the server")
-})
-
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-});

@@ -1,0 +1,40 @@
+name: SecondChance CI/CD
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7
+        ports: ['27017:27017']
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      MONGO_URL: mongodb://127.0.0.1:27017
+      JWT_SECRET: ci-only-not-used-in-any-deployment-random-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install backend dependencies
+        run: npm ci --prefix secondChance-backend
+      - name: Test real MongoDB API, authorization, uploads and concurrency
+        run: npm test --prefix secondChance-backend
+      - name: Install sentiment service dependencies
+        run: npm ci --prefix sentiment
+      - name: Test sentiment service
+        run: npm test --prefix sentiment
+      - name: Install frontend dependencies
+        run: npm ci --prefix secondChance-frontend
+      - name: Build React frontend
+        run: npm run build --prefix secondChance-frontend
+        env:
+          CI: 'false'
+      - name: Build deployment container
+        run: docker build -t secondchance:${{ github.sha }} .

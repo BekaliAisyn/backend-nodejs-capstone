@@ -131,3 +131,13 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+# Local runtime and uploads
+.env.*
+!.env.sample
+!.env.example
+*.log
+.mongo-data/
+coverage/
+secondChance-backend/public/images/*-*.*

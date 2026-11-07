@@ -1,28 +1,19 @@
-// db.js
 require('dotenv').config();
-const MongoClient = require('mongodb').MongoClient;
-
-// MongoDB connection URL with authentication options
-let url = `${process.env.MONGO_URL}`;
-
-let dbInstance = null;
-const dbName = `${process.env.MONGO_DB}`;
-
-async function connectToDatabase() {
-    if (dbInstance){
-        return dbInstance
-    };
-
-    const client = new MongoClient(url);      
-
-    // Task 1: Connect to MongoDB
-    // {{insert code}}
-
-    // Task 2: Connect to database giftDB and store in variable dbInstance
-    //{{insert code}}
-
-    // Task 3: Return database instance
-    // {{insert code}}
+const {MongoClient}=require('mongodb');
+let client, pending;
+async function connectToDatabase(){
+ if(!pending){
+  client=new MongoClient(process.env.MONGO_URL||'mongodb://127.0.0.1:27018',{serverSelectionTimeoutMS:10000});
+  pending=(async()=>{
+   await client.connect();
+   const db=client.db(process.env.MONGO_DB||'secondChance');
+   await db.collection('users').createIndex({email:1},{unique:true});
+   await db.collection('secondChanceItems').createIndex({id:1},{unique:true});
+   return db;
+  })().catch(async e=>{pending=null;await client.close();throw e;});
+ }
+ return pending;
 }
+connectToDatabase.close=async()=>{if(client)await client.close();pending=null;};
+module.exports=connectToDatabase;
 
-module.exports = connectToDatabase;
